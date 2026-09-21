@@ -22,11 +22,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -43,6 +47,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,6 +87,10 @@ fun ProfileScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val sexOptions = listOf("Male", "Female", "Prefer not")
+
+    val configuredApiKey by viewModel.apiKey.collectAsState()
+    var apiKeyInput by remember(configuredApiKey) { mutableStateOf(configuredApiKey) }
+    var showApiKey by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -361,50 +371,122 @@ fun ProfileScreen(
 
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            // Gemini Vision row
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            // Gemini Vision Interactive Configuration
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFFFAF5FF))
+                                    .border(1.dp, Color(0xFFE9D5FF), RoundedCornerShape(12.dp))
+                                    .padding(12.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.AutoAwesome,
-                                        contentDescription = null,
-                                        tint = Color(0xFF8B5CF6),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
-                                        Text(
-                                            text = "Gemini 2.0 Flash Vision",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = CalTrackTextPrimary
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.AutoAwesome,
+                                            contentDescription = null,
+                                            tint = Color(0xFF8B5CF6),
+                                            modifier = Modifier.size(20.dp)
                                         )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                text = "Gemini Flash AI Vision",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = CalTrackTextPrimary
+                                            )
+                                            Text(
+                                                text = "Multimodal Food Scanner (Backendless)",
+                                                fontSize = 11.sp,
+                                                color = CalTrackTextSecondary
+                                            )
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(
+                                                if (configuredApiKey.isNotBlank()) CalTrackGreenBg else Color(0xFFFEF3C7)
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    ) {
                                         Text(
-                                            text = "API Key Configured via ENV",
+                                            text = if (configuredApiKey.isNotBlank()) "Configured" else "Key Required",
                                             fontSize = 11.sp,
-                                            color = CalTrackTextSecondary
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (configuredApiKey.isNotBlank()) CalTrackGreenDark else Color(0xFFB45309)
                                         )
                                     }
                                 }
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(CalTrackGreenBg)
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                OutlinedTextField(
+                                    value = apiKeyInput,
+                                    onValueChange = { apiKeyInput = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Gemini API Key", fontSize = 12.sp) },
+                                    placeholder = { Text("AIzaSy...", fontSize = 12.sp, color = CalTrackTextSecondary) },
+                                    singleLine = true,
+                                    visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                                    trailingIcon = {
+                                        IconButton(onClick = { showApiKey = !showApiKey }) {
+                                            Icon(
+                                                imageVector = if (showApiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                contentDescription = if (showApiKey) "Hide key" else "Show key",
+                                                tint = CalTrackTextSecondary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Ready",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = CalTrackGreenDark
+                                        text = "Free key at aistudio.google.com",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF7C3AED),
+                                        fontWeight = FontWeight.Medium
                                     )
+
+                                    Button(
+                                        onClick = {
+                                            viewModel.setGeminiApiKey(apiKeyInput)
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Gemini API key updated successfully!")
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Save,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Save Key", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
 
                             // Room SQLite row
                             Row(

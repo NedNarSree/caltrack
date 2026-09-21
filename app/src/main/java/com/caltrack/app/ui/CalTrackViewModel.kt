@@ -1,5 +1,11 @@
 package com.caltrack.app.ui
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -9,6 +15,9 @@ import com.caltrack.app.data.dao.WeightDao
 import com.caltrack.app.data.entity.MealEntity
 import com.caltrack.app.data.entity.UserProfileEntity
 import com.caltrack.app.data.entity.WeightEntryEntity
+import com.caltrack.app.data.model.FoodAnalysisResult
+import com.caltrack.app.data.service.ApiKeyManager
+import com.caltrack.app.data.service.FoodVisionService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,7 +47,9 @@ data class DailyHistoryItem(
 class CalTrackViewModel(
     private val mealDao: MealDao,
     private val weightDao: WeightDao,
-    private val profileDao: ProfileDao
+    private val profileDao: ProfileDao,
+    private val foodVisionService: FoodVisionService? = null,
+    private val apiKeyManager: ApiKeyManager? = null
 ) : ViewModel() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -298,6 +309,83 @@ class CalTrackViewModel(
         }
     }
 
+    // AI Food Photo Scanning
+    private val _apiKey = MutableStateFlow(apiKeyManager?.getGeminiApiKey() ?: "")
+    val apiKey: StateFlow<String> = _apiKey.asStateFlow()
+
+    fun setGeminiApiKey(key: String) {
+        apiKeyManager?.setGeminiApiKey(key)
+        _apiKey.value = key.trim()
+    }
+
+    private val _isAnalyzingFood = MutableStateFlow(false)
+    val isAnalyzingFood: StateFlow<Boolean> = _isAnalyzingFood.asStateFlow()
+
+    private val _foodAnalysisError = MutableStateFlow<String?>(null)
+    val foodAnalysisError: StateFlow<String?> = _foodAnalysisError.asStateFlow()
+
+    private val _latestScanResult = MutableStateFlow<FoodAnalysisResult?>(null)
+    val latestScanResult: StateFlow<FoodAnalysisResult?> = _latestScanResult.asStateFlow()
+
+    fun clearFoodAnalysisError() {
+        _foodAnalysisError.value = null
+    }
+
+    fun analyzeFoodPhoto(
+        context: Context,
+        imageUri: Uri,
+        onSuccess: (FoodAnalysisResult) -> Unit = {}
+    ) {
+        if (foodVisionService == null) {
+            _foodAnalysisError.value = "Vision service is not initialized."
+            return
+        }
+
+        viewModelScope.launch {
+            _isAnalyzingFood.value = true
+            _foodAnalysisError.value = null
+
+            val bitmap = loadScaledBitmap(context, imageUri)
+            if (bitmap == null) {
+                _isAnalyzingFood.value = false
+                _foodAnalysisError.value = "Failed to load image from device."
+                return@launch
+            }
+
+            val result = foodVisionService.analyzeFoodImage(bitmap, _apiKey.value)
+            _isAnalyzingFood.value = false
+
+            result.onSuccess { analysis ->
+                _latestScanResult.value = analysis
+                onSuccess(analysis)
+            }.onFailure { error ->
+                _foodAnalysisError.value = error.localizedMessage ?: "Failed to analyze food."
+            }
+        }
+    }
+
+    private fun loadScaledBitmap(context: Context, uri: Uri): Bitmap? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val source = ImageDecoder.createSource(context.contentResolver, uri)
+                ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                    decoder.isMutableRequired = true
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                }
+            } else {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    val options = BitmapFactory.Options().apply {
+                        inSampleSize = 2
+                    }
+                    BitmapFactory.decodeStream(inputStream, null, options)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
     private fun formatHistoryDateLabel(dateStr: String): String {
         return try {
             val d = dateFormat.parse(dateStr) ?: return dateStr
@@ -323,12 +411,14 @@ class CalTrackViewModel(
 class CalTrackViewModelFactory(
     private val mealDao: MealDao,
     private val weightDao: WeightDao,
-    private val profileDao: ProfileDao
+    private val profileDao: ProfileDao,
+    private val foodVisionService: FoodVisionService? = null,
+    private val apiKeyManager: ApiKeyManager? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(CalTrackViewModel::class.java)) {
-            return CalTrackViewModel(mealDao, weightDao, profileDao) as T
+            return CalTrackViewModel(mealDao, weightDao, profileDao, foodVisionService, apiKeyManager) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

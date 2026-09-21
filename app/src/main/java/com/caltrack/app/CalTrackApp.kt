@@ -12,4 +12,12 @@ class CalTrackApp : Application() {
     val database by lazy {
         CalTrackDatabase.getDatabase(this, applicationScope)
     }
+
+    val apiKeyManager by lazy {
+        com.caltrack.app.data.service.ApiKeyManager(this)
+    }
+
+    val foodVisionService by lazy {
+        com.caltrack.app.data.service.FoodVisionService(apiKeyManager)
+    }
 }

@@ -9,12 +9,13 @@ Designed with a **Local-Only & Offline-First** philosophy — all user data, mea
 ## ✨ Features
 
 - **Local & Offline**: Powered by Room Database. No account creation, cloud sync, or telemetry required.
+- **AI Photo Food Scanner (Backendless)**: Snap food photos directly with your camera or upload from gallery. Google Gemini Flash Vision extracts dish identity, estimated portion size, calories, and macronutrient breakdowns with zero custom backend servers required.
 - **Modern Jetpack Compose UI**: Clean emerald theme (`#10B981`), rounded cards (16–20dp), subtle elevations, and macro color indicators (Protein: Blue, Carbs: Amber, Fat: Red).
-- **Daily Dashboard**: Energy balance cards, macronutrient breakdown, remaining allowance, and logged meal timelines.
-- **Snap & Log**: Quick meal logging and entry staging.
-- **Continuous History**: Review past logs, macronutrient splits, and daily weigh-ins.
+- **Daily Dashboard**: Energy balance cards, macronutrient breakdown, remaining allowance, and logged meal timelines with captured food photos.
+- **Snap & Log**: Interactive photo capture, AI estimation, manual calibration steppers, and single-tap saving.
+- **Continuous History**: Review past logs, macronutrient splits, food photo thumbnails, and daily weigh-ins.
 - **Health Metrics & BMI**: Live BMI computation (`weightKg / (heightM)²`) dynamically calculated against your profile.
-- **Profile & Targets**: Configure height, weight, daily calorie allowance, and personal targets.
+- **Profile & Targets**: Configure height, weight, daily calorie allowance, and free Gemini AI Studio API key directly on device.
 
 ---
 

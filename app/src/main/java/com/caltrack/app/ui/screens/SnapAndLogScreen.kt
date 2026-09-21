@@ -1,11 +1,20 @@
 package com.caltrack.app.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,27 +27,33 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,10 +62,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
+import coil.compose.AsyncImage
 import com.caltrack.app.ui.CalTrackViewModel
 import com.caltrack.app.ui.components.CalTrackTopBar
 import com.caltrack.app.ui.theme.CalTrackBg
@@ -64,25 +82,27 @@ import com.caltrack.app.ui.theme.CalTrackTextSecondary
 import com.caltrack.app.ui.theme.MacroCarbsAmber
 import com.caltrack.app.ui.theme.MacroFatRed
 import com.caltrack.app.ui.theme.MacroProteinBlue
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SnapAndLogScreen(
     viewModel: CalTrackViewModel,
     onNavigateBack: () -> Unit,
     onNavigateToProfile: () -> Unit
 ) {
-    // Dish presets simulating Gemini 2.0 Vision analysis
-    val presets = listOf(
-        Triple("Atlantic Salmon Bowl", 520, Triple(42, 38, 18)),
-        Triple("Grilled Chicken Quinoa Salad", 650, Triple(52, 45, 14)),
-        Triple("Avocado Toast & Poached Eggs", 440, Triple(22, 34, 20)),
-        Triple("Lean Beef Steak & Sweet Potato", 680, Triple(55, 42, 22))
-    )
+    val context = LocalContext.current
 
-    var currentPresetIndex by remember { mutableStateOf(0) }
+    val isAnalyzing by viewModel.isAnalyzingFood.collectAsState()
+    val analysisError by viewModel.foodAnalysisError.collectAsState()
+    val configuredApiKey by viewModel.apiKey.collectAsState()
+
+    var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+
     var mealDescription by remember { mutableStateOf("Grilled Salmon & Sweet Potato Bowl") }
     var mealSlot by remember { mutableStateOf("Dinner") }
     var showSlotDropdown by remember { mutableStateOf(false) }
@@ -90,6 +110,11 @@ fun SnapAndLogScreen(
     var proteinGrams by remember { mutableStateOf(42) }
     var carbsGrams by remember { mutableStateOf(38) }
     var fatGrams by remember { mutableStateOf(18) }
+    var aiConfidence by remember { mutableStateOf(0.95f) }
+    var portionGrams by remember { mutableStateOf(280) }
+    var aiSummary by remember { mutableStateOf("Atlantic salmon fillet with roasted sweet potato cubes") }
+    var aiIngredients by remember { mutableStateOf(listOf("Salmon", "Sweet Potato", "Broccoli")) }
+
     var logTime by remember {
         mutableStateOf(
             "Today, " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
@@ -97,6 +122,62 @@ fun SnapAndLogScreen(
     }
 
     val mealSlots = listOf("Breakfast", "Lunch", "Dinner", "Snack")
+
+    // Camera launcher
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && tempCameraUri != null) {
+            capturedImageUri = tempCameraUri
+            viewModel.analyzeFoodPhoto(context, tempCameraUri!!) { result ->
+                mealDescription = result.dishName
+                portionGrams = result.portionGrams
+                calories = result.calories
+                proteinGrams = result.proteinGrams
+                carbsGrams = result.carbsGrams
+                fatGrams = result.fatGrams
+                aiConfidence = result.confidence
+                aiSummary = result.summary
+                aiIngredients = result.ingredients
+            }
+        }
+    }
+
+    // Gallery picker launcher
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            capturedImageUri = uri
+            viewModel.analyzeFoodPhoto(context, uri) { result ->
+                mealDescription = result.dishName
+                portionGrams = result.portionGrams
+                calories = result.calories
+                proteinGrams = result.proteinGrams
+                carbsGrams = result.carbsGrams
+                fatGrams = result.fatGrams
+                aiConfidence = result.confidence
+                aiSummary = result.summary
+                aiIngredients = result.ingredients
+            }
+        }
+    }
+
+    fun launchCamera() {
+        try {
+            val cacheDir = File(context.cacheDir, "camera_photos").apply { mkdirs() }
+            val tempFile = File.createTempFile("meal_snap_", ".jpg", cacheDir)
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                tempFile
+            )
+            tempCameraUri = uri
+            cameraLauncher.launch(uri)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
     // Recalculate macro percentage breakdown
     val totalMacroGrams = (proteinGrams + carbsGrams + fatGrams).coerceAtLeast(1)
@@ -119,7 +200,7 @@ fun SnapAndLogScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Gemini 2.0 Confidence Banner
+            // Gemini AI Status / Confidence Banner
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -135,7 +216,7 @@ fun SnapAndLogScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "GEMINI 2.0 FLASH",
+                            text = "GEMINI FLASH VISION",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF8B5CF6),
@@ -146,20 +227,20 @@ fun SnapAndLogScreen(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .background(CalTrackGreenBg)
+                            .background(if (isAnalyzing) Color(0xFFEDE9FE) else CalTrackGreenBg)
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = "95.6% Confidence",
+                            text = if (isAnalyzing) "Analyzing Food..." else "${(aiConfidence * 100).toInt()}% AI Confidence",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = CalTrackGreenDark
+                            color = if (isAnalyzing) Color(0xFF7C3AED) else CalTrackGreenDark
                         )
                     }
                 }
 
                 Text(
-                    text = presets[currentPresetIndex].first,
+                    text = mealDescription,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = CalTrackTextPrimary,
@@ -167,11 +248,109 @@ fun SnapAndLogScreen(
                 )
 
                 Text(
-                    text = "AI Vision analysis estimated macros. Please review and calibrate below:",
+                    text = if (aiSummary.isNotBlank()) aiSummary else "AI Vision estimated nutritional values. You can review and adjust below:",
                     fontSize = 12.sp,
                     color = CalTrackTextSecondary,
                     modifier = Modifier.padding(top = 2.dp)
                 )
+
+                // Detected ingredients tags
+                if (aiIngredients.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        aiIngredients.forEach { ingredient ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFFF1F5F9))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = ingredient,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = CalTrackTextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Error Banner (e.g. missing API key or scan error)
+            if (analysisError != null) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFFEF2F2))
+                            .border(1.dp, Color(0xFFFECACA), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = Color(0xFFDC2626),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = analysisError ?: "Error analyzing photo",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFFB91C1C),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { viewModel.clearFoodAnalysisError() },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Dismiss",
+                                        tint = Color(0xFFDC2626),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+
+                            if (configuredApiKey.isBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = onNavigateToProfile,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    modifier = Modifier.align(Alignment.End)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Settings,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Set Free API Key in Profile", fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Captured & Analyzed Image Card
@@ -185,120 +364,168 @@ fun SnapAndLogScreen(
                         .padding(14.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // Simulated Dish Visual Card
+                        // Visual Dish Card (Real Photo or Fallback)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(160.dp)
+                                .height(180.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    Color(0xFFF1F5F9)
-                                ),
+                                .background(Color(0xFFF1F5F9)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.Default.Restaurant,
-                                    contentDescription = null,
-                                    tint = CalTrackGreen,
-                                    modifier = Modifier.size(54.dp)
+                            if (capturedImageUri != null) {
+                                AsyncImage(
+                                    model = capturedImageUri,
+                                    contentDescription = "Food Photo",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
                                 )
+                            } else {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.padding(16.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Restaurant,
+                                        contentDescription = null,
+                                        tint = CalTrackGreen,
+                                        modifier = Modifier.size(52.dp)
+                                    )
+                                    Text(
+                                        text = mealDescription,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = CalTrackTextPrimary,
+                                        modifier = Modifier.padding(top = 6.dp)
+                                    )
+                                    Text(
+                                        text = "Snap a photo of your meal to calculate macros automatically",
+                                        fontSize = 11.sp,
+                                        color = CalTrackTextSecondary,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                            }
+
+                            // Portion tag overlay
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 10.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(Color.Black.copy(alpha = 0.70f))
+                                    .padding(horizontal = 12.dp, vertical = 5.dp)
+                            ) {
                                 Text(
-                                    text = presets[currentPresetIndex].first,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = CalTrackTextPrimary,
-                                    modifier = Modifier.padding(top = 6.dp)
+                                    text = if (isAnalyzing) "Analyzing visual features..." else "Estimated Portion • ${portionGrams}g",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White
                                 )
+                            }
+
+                            // Scanning overlay animation
+                            AnimatedVisibility(
+                                visible = isAnalyzing,
+                                enter = fadeIn(),
+                                exit = fadeOut(),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
                                 Box(
                                     modifier = Modifier
-                                        .padding(top = 6.dp)
-                                        .clip(RoundedCornerShape(20.dp))
-                                        .background(Color.Black.copy(alpha = 0.65f))
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.45f)),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = "Captured & Analyzed • 180g",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Color.White
-                                    )
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        CircularProgressIndicator(
+                                            color = Color.White,
+                                            strokeWidth = 3.dp,
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "Gemini Vision is analyzing...",
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
                                 }
                             }
                         }
 
+                        if (isAnalyzing) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp),
+                                color = Color(0xFF8B5CF6),
+                                trackColor = Color(0xFFEDE9FE)
+                            )
+                        }
+
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Retake and Gallery actions
+                        // Camera and Gallery Action Buttons
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            // Camera Button
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(CalTrackGreenBg)
-                                    .clickable {
-                                        // Switch to next preset simulation
-                                        currentPresetIndex = (currentPresetIndex + 1) % presets.size
-                                        val p = presets[currentPresetIndex]
-                                        mealDescription = p.first
-                                        calories = p.second
-                                        proteinGrams = p.third.first
-                                        carbsGrams = p.third.second
-                                        fatGrams = p.third.third
-                                    }
-                                    .padding(vertical = 8.dp),
+                                    .clickable { launchCamera() }
+                                    .padding(vertical = 10.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = Icons.Default.CameraAlt,
-                                        contentDescription = null,
+                                        contentDescription = "Take Photo",
                                         tint = CalTrackGreenDark,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Retake",
+                                        text = if (capturedImageUri != null) "Retake Photo" else "Take Photo",
                                         fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
+                                        fontWeight = FontWeight.Bold,
                                         color = CalTrackGreenDark
                                     )
                                 }
                             }
 
+                            // Gallery Button
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(Color(0xFFF1F5F9))
                                     .clickable {
-                                        // Switch to next preset simulation
-                                        currentPresetIndex = (currentPresetIndex + 1) % presets.size
-                                        val p = presets[currentPresetIndex]
-                                        mealDescription = p.first
-                                        calories = p.second
-                                        proteinGrams = p.third.first
-                                        carbsGrams = p.third.second
-                                        fatGrams = p.third.third
+                                        galleryLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
                                     }
-                                    .padding(vertical = 8.dp),
+                                    .padding(vertical = 10.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = Icons.Default.Image,
-                                        contentDescription = null,
+                                        contentDescription = "Choose from Gallery",
                                         tint = CalTrackTextSecondary,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Gallery",
+                                        text = "Upload Gallery",
                                         fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
+                                        fontWeight = FontWeight.Bold,
                                         color = CalTrackTextSecondary
                                     )
                                 }
@@ -417,7 +644,7 @@ fun SnapAndLogScreen(
                 }
             }
 
-            // Total Energy Stepper Card matching Stitch
+            // Total Energy Stepper Card
             item {
                 Box(
                     modifier = Modifier
@@ -448,6 +675,7 @@ fun SnapAndLogScreen(
                                     color = CalTrackTextPrimary
                                 )
                             }
+
                             Text(
                                 text = "Gemini Calculated",
                                 fontSize = 11.sp,
@@ -525,9 +753,24 @@ fun SnapAndLogScreen(
                                 .height(6.dp)
                                 .clip(RoundedCornerShape(3.dp))
                         ) {
-                            Box(modifier = Modifier.weight(pPct.toFloat().coerceAtLeast(1f)).height(6.dp).background(MacroProteinBlue))
-                            Box(modifier = Modifier.weight(cPct.toFloat().coerceAtLeast(1f)).height(6.dp).background(MacroCarbsAmber))
-                            Box(modifier = Modifier.weight(fPct.toFloat().coerceAtLeast(1f)).height(6.dp).background(MacroFatRed))
+                            Box(
+                                modifier = Modifier
+                                    .weight(pPct.toFloat().coerceAtLeast(1f))
+                                    .height(6.dp)
+                                    .background(MacroProteinBlue)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .weight(cPct.toFloat().coerceAtLeast(1f))
+                                    .height(6.dp)
+                                    .background(MacroCarbsAmber)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .weight(fPct.toFloat().coerceAtLeast(1f))
+                                    .height(6.dp)
+                                    .background(MacroFatRed)
+                            )
                         }
                     }
                 }
@@ -583,7 +826,7 @@ fun SnapAndLogScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Offline & Encrypted Storage. Data will be saved locally to SQLite table 'food_entries'",
+                        text = "Data is saved locally to Room SQLite table 'food_entries' with image attachment.",
                         fontSize = 10.sp,
                         color = CalTrackTextSecondary
                     )
@@ -605,7 +848,8 @@ fun SnapAndLogScreen(
                                 protein = proteinGrams,
                                 carbs = carbsGrams,
                                 fat = fatGrams,
-                                aiConfidence = 0.956f,
+                                imageUri = capturedImageUri?.toString(),
+                                aiConfidence = aiConfidence,
                                 onSuccess = onNavigateBack
                             )
                         },
@@ -672,7 +916,12 @@ private fun MacroEditCard(
                         .background(color)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(text = title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = CalTrackTextPrimary)
+                Text(
+                    text = title,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = CalTrackTextPrimary
+                )
             }
 
             Text(
@@ -698,7 +947,11 @@ private fun MacroEditCard(
                         .clickable { onDecrement() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(imageVector = Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(12.dp))
+                    Icon(
+                        imageVector = Icons.Default.Remove,
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp)
+                    )
                 }
 
                 Box(
@@ -709,7 +962,11 @@ private fun MacroEditCard(
                         .clickable { onIncrement() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(12.dp))
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp)
+                    )
                 }
             }
 

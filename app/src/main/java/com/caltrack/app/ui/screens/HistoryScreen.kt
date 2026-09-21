@@ -37,6 +37,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.caltrack.app.ui.CalTrackViewModel
 import com.caltrack.app.ui.DailyHistoryItem
 import com.caltrack.app.ui.components.CalTrackTopBar
@@ -274,18 +276,35 @@ private fun DailyHistoryCard(item: DailyHistoryItem) {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = meal.title,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = CalTrackTextPrimary
-                                )
-                                Text(
-                                    text = "${meal.mealType} • ${meal.proteinGrams}g P • ${meal.carbsGrams}g C • ${meal.fatGrams}g F",
-                                    fontSize = 10.sp,
-                                    color = CalTrackTextSecondary
-                                )
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (!meal.imageUri.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = meal.imageUri,
+                                        contentDescription = meal.title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+
+                                Column {
+                                    Text(
+                                        text = meal.title,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = CalTrackTextPrimary
+                                    )
+                                    Text(
+                                        text = "${meal.mealType} • ${meal.proteinGrams}g P • ${meal.carbsGrams}g C • ${meal.fatGrams}g F",
+                                        fontSize = 10.sp,
+                                        color = CalTrackTextSecondary
+                                    )
+                                }
                             }
                             Text(
                                 text = "${meal.calories} kcal",

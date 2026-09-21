@@ -31,7 +31,13 @@ class MainActivity : ComponentActivity() {
     private val viewModel: CalTrackViewModel by viewModels {
         val app = application as CalTrackApp
         val db = app.database
-        CalTrackViewModelFactory(db.mealDao(), db.weightDao(), db.profileDao())
+        CalTrackViewModelFactory(
+            db.mealDao(),
+            db.weightDao(),
+            db.profileDao(),
+            app.foodVisionService,
+            app.apiKeyManager
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -32,6 +32,9 @@ import com.caltrack.app.ui.theme.CalTrackBorderSubtle
 import com.caltrack.app.ui.theme.CalTrackGreen
 import com.caltrack.app.ui.theme.CalTrackGreenBg
 import com.caltrack.app.ui.theme.CalTrackSurface
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material.icons.filled.AutoAwesome
+import coil.compose.AsyncImage
 import com.caltrack.app.ui.theme.CalTrackTextPrimary
 import com.caltrack.app.ui.theme.CalTrackTextSecondary
 import com.caltrack.app.ui.theme.CalTrackTextTertiary
@@ -53,32 +56,69 @@ fun MealItemRow(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Food Thumbnail / Avatar
+            // Food Thumbnail / Avatar (Photo or Fallback Icon)
             Box(
                 modifier = Modifier
-                    .size(46.dp)
+                    .size(48.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(CalTrackGreenBg),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Restaurant,
-                    contentDescription = null,
-                    tint = CalTrackGreen,
-                    modifier = Modifier.size(24.dp)
-                )
+                if (!meal.imageUri.isNullOrBlank()) {
+                    AsyncImage(
+                        model = meal.imageUri,
+                        contentDescription = meal.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.Restaurant,
+                        contentDescription = null,
+                        tint = CalTrackGreen,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "${meal.mealType.uppercase()} • ${meal.timeFormatted}",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CalTrackGreen,
-                    letterSpacing = 0.5.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${meal.mealType.uppercase()} • ${meal.timeFormatted}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CalTrackGreen,
+                        letterSpacing = 0.5.sp
+                    )
+
+                    if (meal.aiConfidence != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFFEDE9FE))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "AI Scanned",
+                                tint = Color(0xFF7C3AED),
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "${(meal.aiConfidence * 100).toInt()}%",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF7C3AED)
+                            )
+                        }
+                    }
+                }
+
                 Text(
                     text = meal.title,
                     fontSize = 14.sp,
