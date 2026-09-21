@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Center green circle -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M54,14 A40,40 0 1,0 94,54 A40,40 0 0,0 54,14 Z"/>
+    <!-- Concentric lighter ring -->
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M54,26 A28,28 0 1,0 82,54 A28,28 0 0,0 54,26 Z"/>
+    <!-- Inner darker circle -->
+    <path
+        android:fillColor="#059669"
+        android:pathData="M54,38 A16,16 0 1,0 70,54 A16,16 0 0,0 54,38 Z"/>
+    <!-- White pie quadrant / calorie progress marker -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,26 A28,28 0 0,1 82,54 L66,54 A12,12 0 0,0 54,42 Z"/>
+</vector>
